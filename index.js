@@ -12,7 +12,7 @@ var serialPort = new SerialPort("/dev/ttyACM0", {
     parser: Readline("\r\n")
 });
 
-let humidity = false;
+let temperature = false;
 // const board = new five.Board({
 //   io: new Raspi()
 // });
@@ -62,80 +62,33 @@ serialPort.on("open", function() {
     console.log('open');
 
     serialPort.on('data', function(data) {
-        //console.log('data received: ' + data);
-        let arrH = [];
-        let objG = {};
+        console.log('data received: ' + data);
+
         try {
             let dataRecived = JSON.parse(data);
-
-            for (let props in dataRecived) {
-
-                if (dataRecived[props].temperature > 34 || dataRecived[props].temperature < 20) {
-                    socket.emit('nfTemperature', {
-                        module: props,
-                        temperature: dataRecived[props].temperature
-                    });
-                }
-
-
-                arrH.push(dataRecived[props].humidity);
-
-                if (arrH.length > 4 && humidity === true) {
-                    arrH = [];
-                }
-
-                if (arrH.length === 4 && humidity == false) {
-                    arrH.forEach((element, index) => {
-                        if (element > 52) {
-                            socket.emit('nfHumidity', {
-                                module: index + 1,
-                                humidity: element
-                            }, (cb) => console.log(cb));
-                            humidity = true;
-                        }
-                        if (element < 30) {
-                            socket.emit('nfHumidity', {
-                                module: index + 1,
-                                humidity: element
-                            }, (cb) => console.log(cb));
-                            humidity = true;
-                        }
-                    });
-                    arrH = [];
-                }
-
-                console.log(arrH);
-
-                if ((arrH[0] <= 51 && arrH[0] > 30) &&
-                    (arrH[1] <= 51 && arrH[1] > 30) &&
-                    (arrH[2] <= 51 && arrH[2] > 30) &&
-                    (arrH[3] <= 51 && arrH[3] > 30)) {
-                    humidity = false;
-                }
-
-                console.log(humidity);
-
-                if (dataRecived[props].ammonia > 600) {
-                    socket.emit('nfAmmonia', {
-                        module: props,
-                        ammonia: dataRecived[props].ammonia
-                    });
-                }
-
-                if (dataRecived[props].fire == 1) {
-                    socket.emit('nfFire', {
-                        module: props,
-                        fire: dataRecived[props].fire
-                    });
-                }
-
-                if (dataRecived[props].rain == 1) {
-                    socket.emit('nfRain', {
-                        module: props,
-                        rain: dataRecived[props].rain
-                    });
+            // NOTIFICACION TEMPERATURA
+            if (dataRecived && temperature === false) {
+                dataRecived.temperature.forEach((element, index) => {
+                    if (element > 35 || element < 34) {
+                        console.log('notificacion temperatura');
+                        socket.emit('nfTemperature', {
+                            module: index + 1,
+                            temperature: element
+                        }, (cb) => console.log(cb));
+                        temperature = true;
+                    }
+                });
+            }
+            if (dataRecived && temperature === true) {
+                if ((dataRecived.temperature[0] > 33 && dataRecived.temperature[0] < 36) &&
+                    (dataRecived.temperature[1] > 33 && dataRecived.temperature[1] < 36) &&
+                    (dataRecived.temperature[2] > 33 && dataRecived.temperature[2] < 36) &&
+                    (dataRecived.temperature[3] > 33 && dataRecived.temperature[3] < 36)) {
+                    temperature = false;
                 }
             }
+
+            console.log(temperature);
 
             external_data = data;
             realDataSend(data);
