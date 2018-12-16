@@ -1,6 +1,6 @@
 
 
-tesis project client
+tesis project client Raspi
 
 ----------------------------------------
 

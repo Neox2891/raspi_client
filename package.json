@@ -11,10 +11,8 @@
   "dependencies": {
     "johnny-five": "^0.11.7",
     "raspi-io": "^8.1.1",
-    "request": "^2.83.0",
+    "request": "^2.88.0",
     "sleep": "^5.1.1",
-    "socket.io-client": "^2.1.1",
-    "websocket": "^1.0.25",
-    "ws": "^3.3.2"
+    "socket.io-client": "^2.1.1"
   }
 }
