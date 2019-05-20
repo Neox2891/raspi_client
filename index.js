@@ -3,7 +3,7 @@ const five = require('johnny-five');
 const SerialPort = require('serialport');
 const request = require('request');
 const rp = require('request-promise');
-const urlServer = 'http://192.168.1.30:3030';
+const urlServer = 'http://165.22.129.115:3030';
 
 const socket = require('socket.io-client')(urlServer);
 
@@ -14,6 +14,7 @@ var serialPort = new SerialPort("/dev/ttyUSB0", {
     parser: Readline("\r\n")
 });
 
+let connection = false;
 let counter = 0;
 let temperature = false;
 // notificaciones
@@ -25,16 +26,20 @@ let luz;
 let ventiladores;
 
 socket.on('connect', () => {
-    console.log(socket.connected);
+  console.log(socket.connected);
+  connection = true;
 });
 socket.on('disconnect', () => {
   console.log('Desconectado del servidor');
+  connection = false;
 });
 
 let realDataSend = (data) => {
-  socket.emit('dataSensors', data, (callback) => {
+  if (connection) {
+    socket.emit('dataSensors', data, (callback) => {
       // console.log(callback);
-  });
+    });
+  }
 }
 
 let getMinutes = () => {
@@ -48,52 +53,31 @@ async function getData (data) {
         
   let referenceValues = JSON.parse(getRefValues).latestReferenceValues;
         
-  console.log({referenceValues, type: typeof referenceValues, getRefValues});
+  // console.log({referenceValues, type: typeof referenceValues, getRefValues});
     
   let getActuators = JSON.parse(await rp(`${urlServer}/actuators`));
   
-  console.log(getActuators);
+  // console.log(getActuators);
     
   let actuators = getActuators.latestActuators.actuators;
     
-  console.log(actuators);
+  // console.log(actuators);
     
-  if (referenceValues.flag === true || getActuators.latestActuators.flag === true) {
-      
-    switch (actuators[0]) {
-      
-      case 0:
-        luz = false;
-        break;
-      case 1:
-        luz = true;
-        break;
-    }
-    
-    switch (actuators[1]) {
-      
-      case 0:
-        ventiladores = false;
-        break;
-      case 1:
-        ventiladores = true;
-        break;
-    }
+  if (referenceValues.flag === true) {
       
     maxTemp = referenceValues.maxTemp, minTemp = referenceValues.minTemp,
     maxHum = referenceValues.maxHum, minHum = referenceValues.minHum,
     maxAir = referenceValues.maxAir;
     
     let serialObj = {
-      aT: referenceValues.maxTemp,
-      iT: referenceValues.minTemp,
-      aH: referenceValues.maxHum,
-      iH: referenceValues.minHum,
-      aA: referenceValues.maxAir,
-      A: actuators
+      aT: maxTemp,
+      iT: minTemp,
+      aH: maxHum,
+      iH: minHum,
+      aA: maxAir,
     };
       
-    console.log(serialObj);
+    //console.log(serialObj);
       
     serialPort.write(JSON.stringify(serialObj), function(err) {
       if (err) {
@@ -119,6 +103,46 @@ async function getData (data) {
       },
       json: true // Automatically stringifies the body to JSON
     };
+    let postRefValues = await rp (optionsRefValues);
+    //console.log(postRefValues);
+  }
+  
+  if (getActuators.latestActuators.flag === true) {
+    
+    switch (actuators[0]) {
+      
+      case 0:
+        luz = false;
+        break;
+      case 1:
+        luz = true;
+        break;
+    }
+    
+    switch (actuators[1]) {
+      
+      case 0:
+        ventiladores = false;
+        break;
+      case 1:
+        ventiladores = true;
+        break;
+    }
+    
+    let serialObj = {
+      A: actuators
+    };
+    
+    serialPort.write(JSON.stringify(serialObj), function(err) {
+      if (err) {
+        return console.log('Error on write: ', err.message);
+      }
+      console.log('message written');
+    });
+      // Open errors will be emitted as an error event
+    serialPort.on('error', function(err) {
+      console.log('Error: ', err.message);
+    });
     
     let optionsActuators = {
       method: 'POST',
@@ -131,13 +155,9 @@ async function getData (data) {
       json: true // Automatically stringifies the body to JSON
     };
     
-    let postRefValues = await rp (optionsRefValues);
-    
-    console.log(postRefValues);
-    
     let postActuators = await rp (optionsActuators);
     
-    console.log(postActuators);
+    //console.log(postActuators);
   }
 }
 
@@ -154,15 +174,13 @@ serialPort.on("open", function() {
           let dataRecived = JSON.parse(data);
           // luz posicion 0 del array
           // ventilador posicion 1 del array
-          luz = dataRecived[0];
-          ventiladores = dataRecived[1];
           
           if (dataRecived.actuadores[0] === true && luz === false) {
             request({
             url: `${urlServer}/actuators`,
             method: 'POST',
             body:{
-              actuators: [1,0,0,0],
+              actuators: [1,dataRecived.actuadores[1],0,0],
               date: new Date(),
               swicth: 'manual',
               flag: false
@@ -170,7 +188,7 @@ serialPort.on("open", function() {
             json:true
             
             }, (err, res, body) => {
-              console.log("Luz" +  JSON.stringify(body));
+              // console.log("Luz" +  JSON.stringify(body));
             });
             luz = true;
           }
@@ -180,7 +198,7 @@ serialPort.on("open", function() {
             url: `${urlServer}/actuators`,
             method: 'POST',
             body:{
-              actuators: [0,0,0,0],
+              actuators: [0,dataRecived.actuadores[1],0,0],
               date: new Date(),
               swicth: 'manual',
               flag: false
@@ -188,7 +206,7 @@ serialPort.on("open", function() {
             json:true
             
             }, (err, res, body) => {
-              console.log("Luz" +  JSON.stringify(body));
+              // console.log("Luz" +  JSON.stringify(body));
             });
             luz = false;
           }
@@ -198,7 +216,7 @@ serialPort.on("open", function() {
             url: `${urlServer}/actuators`,
             method: 'POST',
             body:{
-              actuators: [0,1,0,0],
+              actuators: [dataRecived.actuadores[0],1,0,0],
               date: new Date(),
               swicth: 'manual',
               flag: false
@@ -206,7 +224,7 @@ serialPort.on("open", function() {
             json:true
             
             }, (err, res, body) => {
-              console.log("Ventilador" +  JSON.stringify(body));
+              // console.log("Ventilador" +  JSON.stringify(body));
             });
             ventiladores = true;
           }
@@ -216,7 +234,7 @@ serialPort.on("open", function() {
             url: `${urlServer}/actuators`,
             method: 'POST',
             body:{
-              actuators: [0,0,0,0],
+              actuators: [dataRecived.actuadores[0],0,0,0],
               date: new Date(),
               swicth: 'manual',
               flag: false
@@ -224,10 +242,13 @@ serialPort.on("open", function() {
             json:true
             
             }, (err, res, body) => {
-              console.log("Ventilador" +  JSON.stringify(body));
+              // console.log("Ventilador" +  JSON.stringify(body));
             });
             ventiladores = false;
           }
+          
+          luz = dataRecived.actuadores[0];
+          ventiladores = dataRecived.actuadores[1];
             // NOTIFICACION TEMPERATURA
             if (dataRecived && temperature === false) {
                 dataRecived.temperature.forEach((element, index) => {
@@ -285,5 +306,5 @@ serialPort.on("open", function() {
 
 setInterval(() => {
     getData();
-}, 45000);
+}, 65000);
 
